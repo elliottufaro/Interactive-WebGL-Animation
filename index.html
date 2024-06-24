@@ -1,0 +1,194 @@
+<body bgcolor=black>
+<center>
+
+<!! HERE IS A LINK TO THE "CHEAT CARD" THAT SHOWS ALL THE FUNCTIONS YOU CAN CALL IN GLSL.>
+<!! THE LAST PAGE IS ESPECIALLY USEFUL, BECAUSE THAT DESCRIBES ALL THE BUILT-IN FUNCTIONS.>
+
+<canvas id='canvas1' width=1000 height=1000></canvas>
+
+<script>
+
+// THIS FUNCTION DOES ALL OF THE INITIALIZING FOR THE GPU PROGRAM.
+
+let start_gl = (canvas, meshData, vertexSize, vertexShader, fragmentShader) => {
+
+   // GET THE 3D CONTEXT OF THE CANVAS
+
+   let gl = canvas.getContext("webgl");
+
+   // CREATE A PROGRAM THAT WILL RUN ON THE GPU
+
+   let program = gl.createProgram();
+   gl.program = program;
+
+   // THIS IS HOW WE COMPILE AND ATTACH A SHADER TO THE GPU PROGRAM
+
+   let addshader = (type, src) => {
+      let shader = gl.createShader(type);
+      gl.shaderSource(shader, src);
+      gl.compileShader(shader);
+      if (! gl.getShaderParameter(shader, gl.COMPILE_STATUS))
+         throw "Cannot compile shader:\n\n" + gl.getShaderInfoLog(shader);
+      gl.attachShader(program, shader);
+   };
+
+   // ADD THE VERTEX AND FRAGMENT SHADERS
+
+   addshader(gl.VERTEX_SHADER  , vertexShader  );
+   addshader(gl.FRAGMENT_SHADER, fragmentShader);
+
+   // LINK THE PROGRAM AND REPORT ANY ERRORS
+
+   gl.linkProgram(program);
+   if (! gl.getProgramParameter(program, gl.LINK_STATUS))
+      throw "Could not link the shader program!";
+   gl.useProgram(program);
+
+   // DECLARE A PLACE FOR MY VERTICES TO GO DOWN ON THE GPU
+
+   gl.bindBuffer(gl.ARRAY_BUFFER, gl.createBuffer());
+
+   // PERMIT THE GPU TO RENDER NEARER THINGS IN FRONT OF FARTHER AWAY THINGS
+
+   gl.enable(gl.DEPTH_TEST);
+   gl.depthFunc(gl.LEQUAL);
+
+   // SET ANY ONE ATTRIBUTE OF A VERTEX
+
+   let vertexAttribute = (name, size, position) => {
+      let attr = gl.getAttribLocation(program, name);
+      gl.enableVertexAttribArray(attr);
+      gl.vertexAttribPointer(attr, size, gl.FLOAT, false, vertexSize * 4, position * 4);
+   }
+
+   // SET THE POSITION ATTRIBUTE
+
+   vertexAttribute('aPos', 3, 0);
+
+   return gl;
+}
+
+// HERE WE ARE SETTING UP HOW THE CANVAS RESPONDS TO MOUSE EVENTS.
+
+let r = canvas1.getBoundingClientRect(), cursor = [0,0,0];
+let setCursor = (e, z) => cursor = [ (e.clientX - r.left) / canvas1.width * 2 - 1,
+                                     1 - (e.clientY - r.top) / canvas1.height * 2,
+                                     z !== undefined ? z : cursor[2] ];
+canvas1.onmousedown = e => setCursor(e, 1);
+canvas1.onmousemove = e => setCursor(e,  );
+canvas1.onmouseup   = e => setCursor(e, 0);
+
+// ALL OF THE 3D MESH SHAPES THAT WE ARE RENDERING (FOR NOW IT'S JUST ONE SHAPE)
+
+let meshData = [
+   { type: 1, mesh: new Float32Array([ -1,1,0, 1,1,0, -1,-1,0, 1,-1,0 ]) },
+];
+
+// THE VERTEX SHADER, FOLLOWED BY THE FRAGMENT SHADER
+
+let vertexSize = 3;
+let vertexShader = `
+   attribute vec3 aPos;
+   varying   vec3 vPos;
+   void main() {
+      gl_Position = vec4(aPos, 1.0);
+      vPos = aPos;
+   }
+`;
+let fragmentShader = `
+   precision mediump float;
+   uniform float uTime;
+   uniform vec3  uCursor; 
+   varying vec3  vPos;
+
+   vec3 makeItBrighter(vec3 color) {
+      return 2. * color;
+   }
+
+
+   void main(void) {
+
+// ALL OF THE WORK YOU WILL DO FOR THIS ASSIGNMENT WILL
+// BE MODIFICATIONS TO THE FRAGMENT SHADER. IF YOU ARE
+// AMBITIOUS, YOU CAN TRY TO DEFINE YOUR OWN FUNCTIONS.
+// YOU CAN USE THE EXAMPLE FUNCTION ABOVE.
+
+// FEEL FREE TO GET RID OF ALL OF THE CODE BELOW, AND
+// REPLACE IT WITH YOUR OWN ORIGINAL CODE FOR HW2.
+
+
+      vec3 color = vec3(0.0, 0.0, 0.0);
+      color = vec3(sin(0.2*uTime),cos(0.2* uTime), sin(0.2*uTime+3.14));
+
+      
+
+      float dist = length(uCursor.xy - vPos.xy);
+
+     color += cos(2.5*(dist*uTime) + 5.0*sin(uTime) ) > 0.0 ? vec3(1, 1, 1) : vec3(0, 0, 0);
+     color += sin(2.5*(dist*uTime) + 5.0*sin(uTime) ) > 0.0 ? vec3(1, 1, 1) : vec3(0, 0, 0);
+
+   
+      
+
+
+      // THIS IS THE ONLY LINE THAT YOU *MUST* KEEP.
+
+      gl_FragColor = vec4(sqrt(color), 1.);
+   }
+`;
+
+// WAIT 100 MSECS BEFORE STARTING UP
+
+setTimeout(() => {
+
+   // INITIALIZE GPU GRAPHICS
+
+   let gl = start_gl(canvas1, meshData, vertexSize, vertexShader, fragmentShader);
+
+   // PASS UNIFORM VARIABLES
+
+   let uTime   = gl.getUniformLocation(gl.program, "uTime"  );
+   let uCursor = gl.getUniformLocation(gl.program, "uCursor");
+
+   // WHEN DID WE START ANIMATING?
+
+   let startTime = Date.now() / 1000;
+
+   // START THE ANIMATION LOOP
+
+   setInterval(() => {
+
+      // PASS ELAPSED TIME DOWN TO THE GPU
+
+      gl.uniform1f (uTime, Date.now() / 1000 - startTime);
+
+      // PASS THE CURSOR STATE DOWN TO THE GPU
+
+      gl.uniform3fv(uCursor, cursor);
+
+      // LOOP THROUGH ALL OF MY SHAPES
+
+      for (let n = 0 ; n < meshData.length ; n++) {
+
+         // PULL OUT THE ACTUAL MESH DATA
+
+         let mesh = meshData[n].mesh;
+
+	 // LOAD THAT DATA DOWN INTO THE GPU
+
+         gl.bufferData(gl.ARRAY_BUFFER, mesh, gl.STATIC_DRAW);
+
+         // RENDER THAT DATA ACCORDING TO WHAT TYPE IT IS
+
+         gl.drawArrays(meshData[n].type ? gl.TRIANGLE_STRIP : gl.TRIANGLES, 0, mesh.length / vertexSize);
+      }
+   }, 30);
+}, 100);
+</script>
+
+
+
+
+
+
+
